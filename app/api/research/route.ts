@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { apifyScraper } from "@/lib/scrapers";
+import { tryEnrichChannel } from "@/lib/scrapers/firecrawl";
 import { findOutliers } from "@/lib/analysis/outliers";
-import { heuristicSuggestions } from "@/lib/analysis/heuristics";
+import { generateSuggestions } from "@/lib/analysis/generate";
 
 export const maxDuration = 300;
 
 /**
  * POST /api/research — { channelUrl, maxVideos? }
- * Runs the real Apify scrape, deterministic outlier detection, and
- * pattern-based suggestions. Errors are returned honestly, never masked
- * as empty results.
+ * Real pipeline: Apify scrape → deterministic outlier detection →
+ * Firecrawl enrichment (best-effort) → LLM suggestions
+ * (Anthropic → OpenAI → heuristic chain, provenance always labeled).
+ * Errors are returned honestly, never masked as empty results.
  */
 export async function POST(req: Request) {
   let body: { channelUrl?: string; maxVideos?: number };
@@ -30,7 +32,12 @@ export async function POST(req: Request) {
   const maxVideos = Math.min(Math.max(body.maxVideos ?? 15, 5), 30);
 
   try {
-    const videos = await apifyScraper.fetchVideos(channelUrl, maxVideos);
+    // Scrape (Apify) and enrich (Firecrawl) concurrently — enrichment is
+    // best-effort and never fails the run.
+    const [videos, enrichment] = await Promise.all([
+      apifyScraper.fetchVideos(channelUrl, maxVideos),
+      tryEnrichChannel(channelUrl),
+    ]);
     if (videos.length === 0) {
       return NextResponse.json(
         { error: "Apify returned no videos for this channel" },
@@ -46,7 +53,7 @@ export async function POST(req: Request) {
             .sort((a, b) => b.viewCount - a.viewCount)
             .slice(0, 3)
             .map((video) => ({ video, ratio: 1 }));
-    const ideas = heuristicSuggestions(basis, 10);
+    const { suggestions, generator } = await generateSuggestions(basis, 10, enrichment);
     return NextResponse.json({
       channelUrl,
       videosAnalyzed: videos.length,
@@ -58,11 +65,12 @@ export async function POST(req: Request) {
         ratio: Number(o.ratio.toFixed(2)),
       })),
       trueOutliers: outliers.length > 0,
-      ideas,
-      generator: "heuristic (deterministic — LLM generation ships in Loop 003)",
+      enriched: enrichment !== null,
+      ideas: suggestions,
+      generator,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown scrape error";
+    const message = err instanceof Error ? err.message : "Unknown research error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
