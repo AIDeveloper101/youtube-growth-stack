@@ -30,20 +30,9 @@ export default function Home() {
           Talk to your agent. It analyzes competitor channels, finds outlier
           videos, and speaks back titles, ideas, and thumbnail concepts.
         </p>
-        <div className="flex gap-3">
-          <Button asChild size="lg">
-            <Link href="/dashboard">Open the dashboard</Link>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <a
-              href="https://github.com/AIDeveloper101/youtube-growth-stack"
-              target="_blank"
-              rel="noreferrer"
-            >
-              View on GitHub
-            </a>
-          </Button>
-        </div>
+        <Button asChild size="lg">
+          <Link href="/dashboard">Open the dashboard</Link>
+        </Button>
       </div>
 
       <div className="mt-20 grid w-full max-w-4xl gap-4 sm:grid-cols-3">
