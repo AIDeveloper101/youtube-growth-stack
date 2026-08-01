@@ -55,7 +55,7 @@ export async function generateWithClaude(
   const client = new Anthropic();
   const response = await client.beta.messages.create({
     model: MODEL,
-    max_tokens: 4096, // deliberately short structured output — cost cap
+    max_tokens: 16000, // thinking (on by default) + structured output share this cap
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     output_config: { format: { type: "json_schema", schema: SUGGESTIONS_SCHEMA } },
